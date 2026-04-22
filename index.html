@@ -517,19 +517,38 @@ function processRows(rows){
 const MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
 function extractMonth(val){
-  if(!val||val.startsWith('#')) return null;
-  // Try "Jan 2025", "January 2025", "2025-01-15", "15/01/2025", "Jan", "1/2025" etc.
+  if(!val||val.startsWith('#')||val==='Automated'||val==='Viola') return null;
   const s = val.trim();
   // ISO date: 2025-01-15
   let m = s.match(/^(\d{4})-(\d{2})/);
   if(m) return `${MONTH_NAMES[parseInt(m[2])-1]} ${m[1]}`;
-  // M/D/YY or M/D/YYYY format (e.g. 6/1/25 = June 1 2025)
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  // M/D/YYYY (e.g. 4/13/2025)
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if(m){
     const mo = parseInt(m[1])-1;
-    let yr = parseInt(m[3]);
-    if(yr < 100) yr += 2000;
+    if(mo>=0 && mo<=11) return `${MONTH_NAMES[mo]} ${m[3]}`;
+  }
+  // M/D/YY (e.g. 6/1/25)
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+  if(m){
+    const mo = parseInt(m[1])-1;
+    const yr = 2000 + parseInt(m[3]);
     if(mo>=0 && mo<=11) return `${MONTH_NAMES[mo]} ${yr}`;
+  }
+  // DD-Mon-YY (e.g. 10-Feb-25)
+  m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
+  if(m){
+    const abbrs = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    const idx = abbrs.indexOf(m[2].toLowerCase());
+    const yr = 2000 + parseInt(m[3]);
+    if(idx>=0) return `${MONTH_NAMES[idx]} ${yr}`;
+  }
+  // DD-Mon-YYYY (e.g. 10-Feb-2025)
+  m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if(m){
+    const abbrs = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    const idx = abbrs.indexOf(m[2].toLowerCase());
+    if(idx>=0) return `${MONTH_NAMES[idx]} ${m[3]}`;
   }
   // "Jan 2025" or "January 2025"
   m = s.match(/^([A-Za-z]+)[^0-9]*(\d{4})/);
@@ -539,11 +558,6 @@ function extractMonth(val){
     const idx = abbrs.indexOf(abbr);
     if(idx>=0) return `${MONTH_NAMES[idx]} ${m[2]}`;
   }
-  // Bare month name like "Januari" or "Mar"
-  const abbrs2 = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-  const abbr2 = s.slice(0,3).toLowerCase();
-  const idx2 = abbrs2.indexOf(abbr2);
-  if(idx2>=0) return MONTH_NAMES[idx2];
   return null;
 }
 
