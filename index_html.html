@@ -201,6 +201,7 @@ td.muted{color:var(--text2);}
     <span class="brand-name">Sparks <span>Sports</span></span>
   </div>
   <div class="topbar-right">
+    <span id="lastUpdated" style="font-size:11px;color:var(--text3);margin-right:6px;"></span>
     <button class="top-tab active" onclick="showPage('dashboard')">Dashboard</button>
     <button class="top-tab" onclick="showPage('students')">Siswa</button>
     <button class="top-tab" onclick="showPage('sa')">SA Performance</button>
@@ -505,6 +506,8 @@ function processRows(rows){
   document.getElementById('uploadSection').style.display='none';
   document.getElementById('dashContent').style.display='block';
   document.getElementById('dbSub').textContent = `${ALL.length.toLocaleString()} siswa · ${BRANCHES.filter(b=>ALL.some(d=>d.branch===b)).length} branch aktif`;
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent = `🔄 Updated ${now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}`;
   updateDashboard();
   populateStudentFilters();
   renderSA();
@@ -1008,6 +1011,9 @@ function showPage(id){
 
 // Auto-load on startup
 window.addEventListener('DOMContentLoaded', loadFromSheet);
+
+// Auto-refresh every 5 minutes
+setInterval(loadFromSheet, 5 * 60 * 1000);
 
 </script>
 </body>
