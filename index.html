@@ -163,8 +163,22 @@ td.muted{color:var(--text2);}
 .search-wrap input{width:100%;padding:7px 12px 7px 32px;background-image:none!important;}
 .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text3);pointer-events:none;}
 
+/* SA TIERS */
+.tier-section{margin-bottom:24px;}
+.tier-header{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-radius:12px 12px 0 0;margin-bottom:0;}
+.tier-header-inner{display:flex;align-items:center;gap:10px;}
+.tier-icon{font-size:18px;}
+.tier-title{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.06em;}
+.tier-badge{font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;background:rgba(255,255,255,0.2);color:#fff;}
+.tier-body{background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;padding:16px;}
+.tier-top .tier-header{background:#0d9e5c;}
+.tier-mid .tier-header{background:#d97706;}
+.tier-low .tier-header{background:#f97316;}
+.tier-critical .tier-header{background:#e03131;}
+.tier-empty{font-size:13px;color:var(--text3);padding:8px 0;}
+
 /* SA PAGE */
-.sa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:16px;}
+.sa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
 .sa-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;box-shadow:var(--sh);transition:transform .2s,box-shadow .2s;}
 .sa-card:hover{transform:translateY(-3px);box-shadow:var(--sh2);}
 .sa-avatar{width:42px;height:42px;border-radius:12px;background:var(--blue-bg);color:var(--blue);font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
@@ -300,6 +314,30 @@ td.muted{color:var(--text2);}
       </div>
       <div class="cw" style="height:260px;"><canvas id="cohortChart" role="img" aria-label="Cohort FP timing chart"></canvas></div>
       <div class="leg" id="cohortLeg" style="margin-top:12px;"></div>
+      <div id="cohortTable" style="margin-top:16px;overflow-x:auto;"></div>
+      <div id="cohortBranchCharts" style="margin-top:20px;display:none;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">Retention Rate per Branch</div>
+        <div class="cg2">
+          <div class="cc" style="padding:16px;">
+            <div class="cc-head"><div><div class="cc-title" id="branchM0Title">M0 Retention Rate</div></div><span id="branchM0Rate" style="font-size:13px;font-weight:800;color:var(--green);"></span></div>
+            <div style="height:200px;"><canvas id="branchM0Chart"></canvas></div>
+          </div>
+          <div class="cc" style="padding:16px;">
+            <div class="cc-head"><div><div class="cc-title" id="branchM1Title">M+1 Retention Rate</div></div><span id="branchM1Rate" style="font-size:13px;font-weight:800;color:var(--blue);"></span></div>
+            <div style="height:200px;"><canvas id="branchM1Chart"></canvas></div>
+          </div>
+        </div>
+        <div class="cg2">
+          <div class="cc" style="padding:16px;">
+            <div class="cc-head"><div><div class="cc-title" id="branchM2Title">M+2 Retention Rate</div></div><span id="branchM2Rate" style="font-size:13px;font-weight:800;color:var(--amber);"></span></div>
+            <div style="height:200px;"><canvas id="branchM2Chart"></canvas></div>
+          </div>
+          <div class="cc" style="padding:16px;">
+            <div class="cc-head"><div><div class="cc-title" id="branchM3Title">M+3 Retention Rate</div></div><span id="branchM3Rate" style="font-size:13px;font-weight:800;color:var(--amber);"></span></div>
+            <div style="height:200px;"><canvas id="branchM3Chart"></canvas></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -364,7 +402,7 @@ td.muted{color:var(--text2);}
       </select>
     </div>
   </div>
-  <div class="sa-grid" id="saGrid"></div>
+  <div id="saTiers"></div>
 </div>
 
 <!-- MODAL -->
@@ -472,6 +510,32 @@ function parseCSV(file){
 function processRows(rows){
   setLoading(60);
   ALL = [];
+
+  // Find header row and build column index map by name
+  let headerIdx = {};
+  for(let i=0; i<Math.min(rows.length,10); i++){
+    const hasHeader = rows[i].some(c => 
+      c.trim().toLowerCase().includes('churn reason') || 
+      c.trim().toLowerCase().includes('retention status')
+    );
+    if(hasHeader){
+      rows[i].forEach((h,j) => { 
+        if(h.trim()) headerIdx[h.trim().toLowerCase()] = j; 
+      });
+      console.log('Header row found at index', i, headerIdx);
+      break;
+    }
+  }
+
+  // Helper: get col by header name, fallback to fixed index
+  const col = (row, name, fallback) => {
+    const idx = headerIdx[name.toLowerCase()];
+    const val = (idx !== undefined ? row[idx] : row[fallback])?.trim() || '';
+    // if header not found or empty, always try fixed index too
+    if(!val && idx === undefined) return row[fallback]?.trim() || '';
+    return val;
+  };
+
   for(const row of rows){
     if(row.length<10) continue;
     const branch=row[0]?.trim();
@@ -491,12 +555,12 @@ function processRows(rows){
       sa_ret: row[13]?.trim()||'',
       pkg_type: row[17]?.trim()||'',
       exp_payment: row[20]?.trim()||'',
-      ret_status: row[21]?.trim()||'',
-      churn_reason: row[23]?.trim()||'',
+      ret_status: col(row,'retention status',21),
+      churn_reason: row[23]?.trim()||col(row,'churn reason',23),
       last_mem: row[29]?.trim()||'',
-      fp_date: row[34]?.trim()||'',
-      churn_cat: row[46]?.trim()||'Uncategorized',
-      final_verdict: row[47]?.trim()||'Uncategorized',
+      fp_date: col(row,'fp date (mm/dd/yyyy)',34),
+      churn_cat: row[46]?.trim()||col(row,'churn categorizations',46)||'Uncategorized',
+      final_verdict: row[47]?.trim()||col(row,'final verdict',47)||'Uncategorized',
     });
   }
   setLoading(80);
@@ -803,17 +867,143 @@ function renderCohortChart(data){
     {c:'#f59e0b',l:'M+1 ~ M+3'},
     {c:'#e03131',l:'Target 30% (M0~M+3)',dashed:true},
   ].map(x=>`<span class="leg-item"><span class="leg-dot" style="background:${x.c};${x.dashed?'border-radius:0;height:3px;width:14px;border-top:2.5px dashed '+x.c+';background:transparent;':''}" ></span>${x.l}</span>`).join('');
+
+  // Build per-cohort fp breakdown for all 7 months
+  const isPaidFn = d => d.fp_date && !d.fp_date.startsWith('#') && d.fp_date !== '';
+  const colColors = ['#93c5fd','#60a5fa','#3b82f6','#0d9e5c','#fcd34d','#f59e0b','#d97706'];
+
+  const colCards = offsets.map((o, i) => {
+    const cohortMo = months[i];
+    const cohort = ALL.filter(d => extractMonth(d.last_mem_date) === cohortMo);
+    const cohortTotal = cohort.length;
+    const cohortPaid = cohort.filter(isPaidFn);
+    const cohortPaidTotal = cohortPaid.length;
+    const retPct = cohortTotal ? Math.round(cohortPaidTotal/cohortTotal*100) : 0;
+    const retColor = retPct >= 30 ? 'var(--green)' : retPct >= 20 ? 'var(--amber)' : 'var(--red)';
+
+    // breakdown by fp_date relative to cohortMo
+    const breakdown = [-2,-1,0,1,2].map(d => {
+      const bMo = shiftMonth(cohortMo, d);
+      const n = cohortPaid.filter(x => extractMonth(x.fp_date) === bMo).length;
+      const pct = cohortTotal ? Math.round(n/cohortTotal*100) : 0;
+      const label = d===0?'M0':d<0?`M${d}`:`M+${d}`;
+      return {label, pct, n, mo: bMo};
+    }).filter(x => x.n > 0);
+
+    return `
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 14px;min-width:130px;flex:1;">
+        <div style="font-size:11px;font-weight:700;color:${colColors[i]};margin-bottom:2px;">${labels[i].split(' ')[0]}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px;">${cohortMo}</div>
+        <div style="font-size:20px;font-weight:800;color:${retColor};font-family:'DM Sans',sans-serif;line-height:1;margin-bottom:8px;">${retPct}%</div>
+        <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:4px;">
+          ${breakdown.length ? breakdown.map(b => `
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);">
+              <span>${b.label}</span>
+              <span style="font-weight:700;color:var(--text);">${b.pct}%</span>
+            </div>`).join('') : `<div style="font-size:10px;color:var(--text3);">No FP data</div>`}
+          ${breakdown.length > 1 ? `
+            <div style="display:flex;justify-content:space-between;font-size:10px;border-top:1px solid var(--border);padding-top:4px;margin-top:2px;">
+              <span style="color:var(--text2);font-weight:600;">Total</span>
+              <span style="font-weight:800;color:${retColor};">${retPct}%</span>
+            </div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('cohortTable').innerHTML = `
+    <div style="display:flex;gap:8px;margin-top:16px;overflow-x:auto;padding-bottom:4px;">
+      ${colCards}
+    </div>
+  `;
+
+  // Render per-branch breakdown for M0, M+1, M+2, M+3
+  const branchSlots = [
+    {offset:0, chartId:'branchM0Chart', titleId:'branchM0Title', rateId:'branchM0Rate', color:'#0d9e5c', label:'M0'},
+    {offset:1, chartId:'branchM1Chart', titleId:'branchM1Title', rateId:'branchM1Rate', color:'#2563eb', label:'M+1'},
+    {offset:2, chartId:'branchM2Chart', titleId:'branchM2Title', rateId:'branchM2Rate', color:'#d97706', label:'M+2'},
+    {offset:3, chartId:'branchM3Chart', titleId:'branchM3Title', rateId:'branchM3Rate', color:'#d97706', label:'M+3'},
+  ];
+
+  document.getElementById('cohortBranchCharts').style.display = 'block';
+
+  branchSlots.forEach(slot => {
+    const mo = shiftMonth(selectedMonth, slot.offset);
+    const cohortForMo = ALL.filter(d => extractMonth(d.last_mem_date) === mo);
+    const branches = BRANCHES.filter(b => cohortForMo.some(d => d.branch === b));
+    const branchRates = branches.map(b => {
+      const t = cohortForMo.filter(d => d.branch === b).length;
+      const p = cohortForMo.filter(d => d.branch === b && isPaidFn(d)).length;
+      return {branch: b, rate: t ? Math.round(p/t*100) : 0, paid: p, total: t};
+    }).sort((a,b) => b.rate - a.rate);
+
+    const overallRate = cohortForMo.length ? Math.round(cohortForMo.filter(isPaidFn).length / cohortForMo.length * 100) : 0;
+    document.getElementById(slot.titleId).textContent = `${slot.label} — ${mo}`;
+    document.getElementById(slot.rateId).textContent = `Retention % ${overallRate}%`;
+    document.getElementById(slot.rateId).style.color = slot.color;
+
+    mkChart(slot.chartId, 'bar', branchRates.map(x=>x.branch), [{
+      data: branchRates.map(x=>x.rate),
+      backgroundColor: slot.color,
+      borderRadius: 4,
+      borderWidth: 0,
+    }], {
+      scales:{
+        y:{ticks:{color:'#9ba3bd',callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.04)'},beginAtZero:true,max:50},
+        x:{ticks:{color:'#9ba3bd',font:{size:10}},grid:{display:false}}
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label: ctx => ` ${ctx.parsed.y}% (${branchRates[ctx.dataIndex].paid}/${branchRates[ctx.dataIndex].total})`}}
+      },
+      animation:{
+        onComplete(ctx){
+          const chart = ctx.chart;
+          const {ctx:c} = chart;
+          c.save();
+          c.font = '600 10px Plus Jakarta Sans,sans-serif';
+          c.textAlign = 'center';
+          c.textBaseline = 'bottom';
+          c.fillStyle = slot.color;
+          chart.getDatasetMeta(0).data.forEach((bar,i) => {
+            if(branchRates[i].rate > 0) c.fillText(branchRates[i].rate+'%', bar.x, bar.y - 2);
+          });
+          c.restore();
+        }
+      }
+    });
+  });
 }
 
 function renderMetrics(data){
   const total = data.length;
-  const paid = data.filter(d=>d.fp_date && !d.fp_date.startsWith('#')).length;
+  const isPaid = d => d.fp_date && !d.fp_date.startsWith('#') && d.fp_date !== '';
+  const paid = data.filter(isPaid).length;
   const churned = data.filter(d=>d.ret_status==='Churned').length;
   const unsure = data.filter(d=>['Still unsure','Asked - still no response','Not yet been asked','Not yet asked'].includes(d.ret_status)).length;
   const retRate = total ? Math.round((paid/total)*100) : 0;
+
+  // M0/M-1/M-2 breakdown based on selected month filter
+  const selectedMonth = document.getElementById('fMonth').value;
+  let breakdownHtml = `${retRate}% retention rate`;
+  if(selectedMonth && paid > 0){
+    const m0 = data.filter(d => isPaid(d) && extractMonth(d.fp_date) === selectedMonth).length;
+    const m1 = data.filter(d => isPaid(d) && extractMonth(d.fp_date) === shiftMonth(selectedMonth,-1)).length;
+    const m2 = data.filter(d => isPaid(d) && extractMonth(d.fp_date) === shiftMonth(selectedMonth,-2)).length;
+    const m0pct = total ? Math.round(m0/total*100) : 0;
+    const m1pct = total ? Math.round(m1/total*100) : 0;
+    const m2pct = total ? Math.round(m2/total*100) : 0;
+    breakdownHtml = `
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;display:flex;flex-direction:column;gap:2px;">
+        <div style="display:flex;justify-content:space-between;"><span>M0</span><span style="font-weight:700;color:var(--green);">${m0pct}%</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>M-1</span><span style="font-weight:700;color:var(--green);">${m1pct}%</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>M-2</span><span style="font-weight:700;color:var(--green);">${m2pct}%</span></div>
+        <div style="border-top:1px solid var(--border);margin-top:2px;padding-top:2px;display:flex;justify-content:space-between;"><span>Total</span><span style="font-weight:700;color:var(--green);">${retRate}%</span></div>
+      </div>`;
+  }
+
   document.getElementById('metricsGrid').innerHTML = `
     <div class="mc c-blue fade-in"><div class="mc-icon">👤</div><div class="mc-val">${total.toLocaleString()}</div><div class="mc-label">Total Siswa</div><div class="mc-sub">dari ${ALL.length.toLocaleString()} total</div></div>
-    <div class="mc c-green fade-in"><div class="mc-icon">✅</div><div class="mc-val">${paid.toLocaleString()}</div><div class="mc-label">Paid Retention</div><div class="mc-sub">${retRate}% retention rate</div></div>
+    <div class="mc c-green fade-in"><div class="mc-icon">✅</div><div class="mc-val">${paid.toLocaleString()}</div><div class="mc-label">Paid Retention</div><div class="mc-sub">${breakdownHtml}</div></div>
     <div class="mc c-red fade-in"><div class="mc-icon">❌</div><div class="mc-val">${churned.toLocaleString()}</div><div class="mc-label">Churned</div><div class="mc-sub">${total?Math.round(churned/total*100):0}% dari total</div></div>
     <div class="mc c-amber fade-in"><div class="mc-icon">⏳</div><div class="mc-val">${unsure.toLocaleString()}</div><div class="mc-label">Belum Dipastikan</div><div class="mc-sub">Perlu follow-up</div></div>
     <div class="mc c-purple fade-in"><div class="mc-icon">🏢</div><div class="mc-val">${[...new Set(data.map(d=>d.branch))].length}</div><div class="mc-label">Branch Aktif</div><div class="mc-sub">dari 16 total</div></div>
@@ -992,13 +1182,22 @@ function renderSA(){
     else saMap[sa].unsure++;
   });
 
-  const sorted=Object.values(saMap).sort((a,b)=>b.total-a.total).slice(0,40);
-  const colors=['#1a5fa8','#1a7a4a','#c0392b','#b85c00','#9b59b6','#e8440c','#3498db','#27ae60'];
+  const allSA = Object.values(saMap).map(sa => ({
+    ...sa,
+    rate: sa.total ? Math.round(sa.paid/sa.total*100) : 0
+  })).sort((a,b) => b.rate - a.rate);
 
-  document.getElementById('saGrid').innerHTML=sorted.map((sa,i)=>{
-    const rate=sa.total?Math.round(sa.paid/sa.total*100):0;
-    const initials=sa.name.split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
-    const color=colors[i%colors.length];
+  const tiers = [
+    {key:'top',    cls:'tier-top',      icon:'🏆', title:'Top Performer',      badge:'RR ≥ 35%',    desc:'RR di atas target. Role model center.',         action:'Bonus penuh. Jadikan Group Anchor. Diakui di monthly meeting.',  filter: sa => sa.rate >= 35},
+    {key:'mid',    cls:'tier-mid',      icon:'📈', title:'Mid Performer',      badge:'RR 30%–34%',  desc:'Di jalur yang benar, tapi belum di target.',     action:'Bonus parsial. Coaching dari AM setiap 2 minggu. Fokus 1 leading indicator.', filter: sa => sa.rate >= 30 && sa.rate < 35},
+    {key:'low',    cls:'tier-low',      icon:'⚠️', title:'Low Performer',      badge:'RR 25%–29%',  desc:'Di bawah standar. Butuh perbaikan segera.',      action:'Coaching intensif setiap minggu. Action plan 30 hari dengan target mingguan.', filter: sa => sa.rate >= 25 && sa.rate < 30},
+    {key:'crit',   cls:'tier-critical', icon:'🚨', title:'Special Attention',  badge:'RR < 25%',    desc:'Kritis. Butuh intervensi langsung AM.',          action:'PIP process. SP1 jika tidak ada perbaikan dalam 30 hari.',       filter: sa => sa.rate < 25},
+  ];
+
+  const saCardHtml = (sa, i) => {
+    const colors=['#0d9e5c','#2563eb','#e03131','#d97706','#7c3aed','#e8440c','#0891b2','#16a34a'];
+    const color = colors[i%colors.length];
+    const initials = sa.name.split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
     return `<div class="sa-card">
       <div class="sa-avatar" style="background:${color}18;color:${color};">${initials}</div>
       <div class="sa-name">${sa.name}</div>
@@ -1006,10 +1205,36 @@ function renderSA(){
         <div class="sa-row"><span>Total siswa</span><span>${sa.total.toLocaleString()}</span></div>
         <div class="sa-row"><span>Paid retention</span><span style="color:var(--green);">${sa.paid.toLocaleString()}</span></div>
         <div class="sa-row"><span>Churned</span><span style="color:var(--red);">${sa.churned.toLocaleString()}</span></div>
-        <div class="sa-row"><span>Retention rate</span><span style="color:${rate>=50?'var(--green)':rate>=30?'var(--amber)':'var(--red)'};">${rate}%</span></div>
+        <div class="sa-row"><span>Retention rate</span><span style="font-weight:800;color:${sa.rate>=35?'var(--green)':sa.rate>=30?'var(--amber)':sa.rate>=25?'#f97316':'var(--red)'};">${sa.rate}%</span></div>
         <div class="sa-row"><span>Branch</span><span style="color:var(--text2);font-size:11px;">${[...sa.branches].join(', ')}</span></div>
       </div>
     </div>`;
+  };
+
+  document.getElementById('saTiers').innerHTML = tiers.map(tier => {
+    const members = allSA.filter(tier.filter);
+    return `
+      <div class="tier-section ${tier.cls}">
+        <div class="tier-header">
+          <div class="tier-header-inner">
+            <span class="tier-icon">${tier.icon}</span>
+            <span class="tier-title">${tier.title}</span>
+          </div>
+          <span class="tier-badge">${tier.badge}</span>
+        </div>
+        <div class="tier-body">
+          <div style="display:flex;gap:16px;margin-bottom:${members.length?'16px':'0'};">
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">${tier.desc}</div>
+              <div style="font-size:12px;color:var(--text2);">${tier.action}</div>
+            </div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:24px;font-weight:800;color:var(--text3);white-space:nowrap;">${members.length} SA</div>
+          </div>
+          ${members.length
+            ? `<div class="sa-grid">${members.map((sa,i)=>saCardHtml(sa,i)).join('')}</div>`
+            : `<div class="tier-empty">Tidak ada SA di tier ini</div>`}
+        </div>
+      </div>`;
   }).join('');
 }
 
